@@ -6,14 +6,18 @@ import { IUser, User } from "../models/user.model";
 import { uploadOnCloudinary } from "../utils/cloudinary";
 import { ApiResponse } from "../utils/ApiResponse";
 import argon2 from "argon2";  
-
+import jwt from "jsonwebtoken";
 export interface FileRequest extends Request {
     files: {
         avatar?: Express.Multer.File[];
         coverImage?: Express.Multer.File[];
     };
 }
-
+interface CookieOptions {
+    httpOnly: boolean;
+    secure: boolean;
+    sameSite: 'none' | 'lax' | 'strict';  
+}
 const userRegistrationSchema = z.object({
     fullName: z.string().min(1, "Full name is required"),
     email: z.string().email("Invalid email format").min(1, "Email is required"),
@@ -124,25 +128,21 @@ const loginUser = asyncHandler(async (req: Request, res: Response) => {
     const { accessToken, refreshToken } = await generateAccessAndRefreshToken(userDetails._id);
 
     // Fetch the user without sensitive information
-    const loggedInUser = await User.findById(userDetails._id).select("-password -refreshToken -OTP");
+    const loggedInUser = await User.findById(userDetails._id).select("-password -refreshToken ");
 
     // Cookie options for secure HTTP-only cookies
-    interface CookieOptions {
-        httpOnly: boolean;
-        secure: boolean;
-        sameSite: 'none' | 'lax' | 'strict';  // Lowercase values for Express compatibility
-    }
+    
 
     const accessTokenOptions: CookieOptions = {
         httpOnly: true,
         secure: true,
-        sameSite: 'strict', 
+        sameSite: 'none', 
     };
 
     const refreshTokenOptions: CookieOptions = {
         httpOnly: true,
         secure: true,
-        sameSite: 'strict', 
+        sameSite: 'none', 
     };
 
     // Set the cookies with the tokens
@@ -166,4 +166,59 @@ const logOut = asyncHandler(async (req: Request, res: Response) => {
             message: "User logged out successfully"}));
     })
 })
-export { registerUser, loginUser,logOut };
+
+
+interface DecodedToken {
+    _id: string;
+  }
+const refreshAccesstoken = asyncHandler(async (req: Request, res: Response) => {
+    const token: string | undefined = req.cookies.refreshToken || req.body.refreshToken;
+  
+    try {
+      if (!token) throw new ApiError(401, "Unauthorized user");
+  
+      // Decode and verify the token
+      const decodedtoken = jwt.verify(token, process.env.REFRESH_TOKEN_SECRET as string) as DecodedToken;
+  
+      if (!decodedtoken) throw new ApiError(401, "Unauthorized user");
+  
+      // Find the user by the decoded ID
+      const user = await User.findById(decodedtoken._id);
+  
+      if (!user) throw new ApiError(401, "Invalid refresh token");
+  
+      if (user.refreshToken !== token) throw new ApiError(401, "Refresh token is expired");
+  
+      // Generate new tokens
+      const { accessToken, refreshToken } = await generateAccessAndRefreshToken(user._id);
+
+    // Fetch the user without sensitive information
+    const loggedInUser = await User.findById(user._id).select("-password -refreshToken ");
+
+
+    
+
+    const accessTokenOptions: CookieOptions = {
+        httpOnly: true,
+        secure: true,
+        sameSite: 'none', 
+    };
+
+    const refreshTokenOptions: CookieOptions = {
+        httpOnly: true,
+        secure: true,
+        sameSite: 'none', 
+    };
+
+    // Set the cookies with the tokens
+    res.cookie('refreshToken', refreshToken, refreshTokenOptions);
+    res.cookie('accessToken', accessToken, accessTokenOptions);
+
+    return res.status(200).json(new ApiResponse(200, "User logged in successfully...", { user: loggedInUser, accessToken, refreshToken }));
+  
+    } catch (error) {
+      throw new ApiError(500, "Something went wrong");
+    }
+  });
+  
+export {registerUser,loginUser,logOut,refreshAccesstoken}
