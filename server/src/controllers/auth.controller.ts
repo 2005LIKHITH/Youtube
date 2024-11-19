@@ -220,5 +220,20 @@ const refreshAccesstoken = asyncHandler(async (req: Request, res: Response) => {
       throw new ApiError(500, "Something went wrong");
     }
   });
+
+const changeUserPassword = asyncHandler(async(req:Request,res:Response)=>{
+    console.log("I am in changeUser password");
+
+    const {currentPassword,newPassword}:{currentPassword:string,newPassword:string} = req.body;
+    
+    if(!currentPassword || !newPassword)throw  new ApiError(400,"Current password and new password are required");
+    const user = await User.findById(req.user?._id);
+    if(!user)throw new ApiError(404,"User not found");
+    const isPasswordCorrect = await user.isPasswordCorrect(currentPassword);
+    if(!isPasswordCorrect)throw new ApiError(401,"Current password is incorrect");
+    user.password = newPassword;
+    await user.save();
+    return res.status(200).json(new ApiResponse(200,"Password changed successfully",{}));
+})
   
-export {registerUser,loginUser,logOut,refreshAccesstoken}
+export {registerUser,loginUser,logOut,refreshAccesstoken,changeUserPassword}

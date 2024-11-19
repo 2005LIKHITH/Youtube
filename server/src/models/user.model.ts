@@ -49,7 +49,7 @@ userSchema.pre('save', async function (next) {
 
 userSchema.methods.isPasswordCorrect = async function (password: string): Promise<boolean> {
     try {
-        // Verify the password using Argon2
+        
         return await argon2.verify(this.password, password);
     } catch (error) {
         console.error("Error verifying password:", error);
