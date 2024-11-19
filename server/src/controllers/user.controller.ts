@@ -235,6 +235,66 @@ const subscribeUnsubscribe = asyncHandler(async (req: Request, res: Response) =>
         });
     }
 });
+const viewSubscribers = asyncHandler(async (req: Request, res: Response) => {
+    const id = req.user?._id as string;
+    
+    if (!mongoose.isValidObjectId(id)) {
+        throw new ApiError(400, "Invalid User ID");
+    }
+
+    const userSubscribers = await User.aggregate([
+        {
+            $match: { _id: new mongoose.Types.ObjectId(id) },
+        },
+        {
+            $lookup: {
+                from: 'subscriptions',
+                localField: '_id',
+                foreignField: 'channel',
+                as: 'subscribers',
+            },
+        },
+        {
+            $unwind: {
+                path: '$subscribers',
+                preserveNullAndEmptyArrays: false,
+            },
+        },
+        {
+            $lookup: {
+                from: 'users',
+                localField: 'subscribers.subscriber',
+                foreignField: '_id',
+                as: 'subscriberDetails',
+            },
+        },
+        {
+            $unwind: {
+                path: '$subscriberDetails',
+            },
+        },
+        {
+            $project: {
+                _id: 0,
+                subscriberId: '$subscriberDetails._id',
+                subscriberUsername: '$subscriberDetails.username',
+                subscriberFullName: '$subscriberDetails.fullName',
+                subscriberAvatar: '$subscriberDetails.avatar',
+            },
+        },
+    ]);
+
+    if (!userSubscribers || userSubscribers.length === 0) {
+        throw new ApiError(404, "No subscribers found for this user");
+    }
+
+    res.status(200).json({
+        success: true,
+        message: "Subscribers fetched successfully",
+        subscribers: userSubscribers,
+    });
+});
 
 
-export {getUserProfile,getOtherUsersProfile,updateUserProfile,updateUserAvatarImage,updateUserCoverImage,subscribeUnsubscribe};
+export {getUserProfile,getOtherUsersProfile,updateUserProfile,
+    viewSubscribers,updateUserAvatarImage,updateUserCoverImage,subscribeUnsubscribe};

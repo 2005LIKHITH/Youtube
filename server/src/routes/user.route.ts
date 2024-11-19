@@ -2,7 +2,7 @@ import {Router} from "express";
 import { verifyJWT } from "../middlewares/auth.middleware";
 import { upload } from "../middlewares/multer.middleware";
 import {registerUser,loginUser,logOut,refreshAccesstoken,changeUserPassword} from "../controllers/auth.controller";
-import { getUserProfile, getOtherUsersProfile, updateUserProfile,subscribeUnsubscribe } from "../controllers/user.controller";
+import { getUserProfile, getOtherUsersProfile, updateUserProfile,subscribeUnsubscribe,viewSubscribers } from "../controllers/user.controller";
 const router:Router = Router();
 router.route('/signup').post(
     upload.fields([
@@ -21,4 +21,5 @@ router.route('/update/UserProfile').put(verifyJWT,updateUserProfile);
 router.route('/update/UserAvatarImage').put(verifyJWT,upload.single('avatar'),updateUserProfile);
 router.route('/update/UserCoverImage').put(verifyJWT,upload.single('coverImage'),updateUserProfile);
 router.route('/subscribe/:id').post(verifyJWT,subscribeUnsubscribe);
+router.route('/view-subscribers').get(verifyJWT,viewSubscribers);
 export default router
