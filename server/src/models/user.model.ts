@@ -9,6 +9,7 @@ export interface IUser extends Document {
     avatar?: string;
     coverImage?: string;
     watchHistory: mongoose.Types.ObjectId[];
+    following : mongoose.Types.ObjectId[]
     password: string;
     refreshToken: string;
     isPasswordCorrect(password: string): Promise<boolean>;

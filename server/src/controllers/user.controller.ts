@@ -1,13 +1,12 @@
 import { Request, Response } from "express";
-import { z } from "zod";
 import { asyncHandler } from "../utils/asyncHandler";
 import { ApiError } from "../utils/ApiError";
-import { IUser, User } from "../models/user.model";
+import { User, IUser } from "../models/user.model";
 import { uploadOnCloudinary } from "../utils/cloudinary";
 import { ApiResponse } from "../utils/ApiResponse";
-import argon2 from "argon2";  
-import jwt from "jsonwebtoken";
-
+import { addAbortSignal } from "stream";
+import mongoose, { ObjectId } from "mongoose";
+import { Subscription } from "../models/subscription.model";
 
 /*
 
@@ -25,28 +24,131 @@ import jwt from "jsonwebtoken";
 
 
 */
-
 const getUserProfile = asyncHandler(async (req: Request, res: Response) => {
-    const id = req.user?._id;
-    
-    const user  = await User.findById(id);
+    const id = req.user?._id as string;
 
-    if(!user)throw new ApiError(404,"User not found");
-    return res.status(200).json(new ApiResponse(200,"User found successfully",user));
-})
+    if (!id) throw new ApiError(400, "User ID is missing");
+
+    if (!mongoose.isValidObjectId(id)) {
+        throw new ApiError(400, "Invalid User ID");
+    }
+
+    const objectId = new mongoose.Types.ObjectId(id); // Convert once
+
+    const userProfile = await User.aggregate([
+        {
+            $match: { _id: objectId }, // Use objectId here
+        },
+        {
+            $lookup: {
+                from: "subscriptions",
+                localField: "_id",
+                foreignField: "channel",
+                as: "subscribers",
+            },
+        },
+        {
+            $lookup: {
+                from: "subscriptions",
+                localField: "_id",
+                foreignField: "subscriber",
+                as: "subscribedTo",
+            },
+        },
+        {
+            $addFields: {
+                subscribersCount: { $size: "$subscribers" },
+                subscribedToCount: { $size: "$subscribedTo" },
+                isSubscribed: {
+                    $in: [req.user?._id, "$subscribers.subscriber"], // Check for subscription
+                },
+            },
+        },
+        {
+            $project: {
+                fullName: 1,
+                userName: 1,
+                avatar: 1,
+                coverImage: 1,
+                email: 1,
+                subscribersCount: 1,
+                subscribedToCount: 1,
+                isSubscribed: 1, // Ensure isSubscribed is projected
+            },
+        },
+    ]);
+
+    if (!userProfile?.length) throw new ApiError(404, "User not found");
+
+    return res
+        .status(200)
+        .json(new ApiResponse(200, userProfile[0], "User profile fetched successfully"));
+});
+
 
 const getOtherUsersProfile = asyncHandler(async (req: Request, res: Response) => {
-    console.log("Hitting getOtherUsersProfile");
-    let username = req.params.username;
-    username = username.toLowerCase();
-    console.log(username);
-    const user = await User.findOne({userName:username});
-    ;
-    console.log(user);
-    
-    if(!user)throw new ApiError(404,"User not found");
-    return res.status(200).json(new ApiResponse(200,"User found successfully",user));
-})
+    const { username } = req.params;
+
+    if (!username || !username.trim())
+        throw new ApiError(400, "Username is missing");
+
+    const otherUserProfile = await User.aggregate([
+        {
+            $match: { userName: username.toLowerCase() },
+        },
+        {
+            $lookup: {
+                from: "subscriptions",
+                localField: "_id",
+                foreignField: "channel",
+                as: "subscribers",
+            },
+        },
+        {
+            $lookup: {
+                from: "subscriptions",
+                localField: "_id",
+                foreignField: "subscriber",
+                as: "subscribedTo",
+            },
+        },
+        {
+            $addFields: {
+                subscribersCount: { $size: "$subscribers" },
+                subscribedToCount: { $size: "$subscribedTo" },
+                isSubscribed: {
+                    $cond: {
+                        if: { $in: [req.user?._id, "$subscribers.subscriber"] },
+                        then: true,
+                        else: false,
+                    },
+                },
+            },
+        },
+        {
+            $project: {
+                fullName: 1,
+                userName: 1,
+                avatar: 1,
+                coverImage: 1,
+                email: 1,
+                subscribersCount: 1,
+                subscribedToCount: 1,
+                isSubscribed: 1,
+            },
+        },
+    ]);
+
+    if (!otherUserProfile?.length)
+        throw new ApiError(404, "User not found");
+
+    return res
+        .status(200)
+        .json(
+            new ApiResponse(200, otherUserProfile[0], "Other user's profile fetched successfully")
+        );
+});
+
 const updateUserProfile = asyncHandler(async (req: Request, res: Response) => {
     console.log("Updating user profile......");
     const { fullName, userName } = req.body;
@@ -103,5 +205,36 @@ const updateUserCoverImage = asyncHandler(async (req: Request, res: Response) =>
         coverImageUrl: cover.url,
     });
 });
+const subscribeUnsubscribe = asyncHandler(async (req: Request, res: Response) => {
+    const { id } = req.params;
+    const user = await User.findById(req.user?._id);
+    if (!user) throw new ApiError(404, "User not found");
 
-export {getUserProfile,getOtherUsersProfile,updateUserProfile,updateUserAvatarImage,updateUserCoverImage};
+    const channel = await User.findById(id);
+    if (!channel) throw new ApiError(404, "Channel not found");
+
+    const isSubscribed = await Subscription.findOne({
+        channel: channel._id,
+        subscriber: user._id,
+    });
+
+    if (isSubscribed) {
+        await isSubscribed.deleteOne();
+        res.status(200).json({
+            success: true,
+            message: "Unsubscribed successfully",
+        });
+    } else {
+        await Subscription.create({
+            channel: channel._id,
+            subscriber: user._id,
+        });
+        res.status(200).json({
+            success: true,
+            message: "Subscribed successfully",
+        });
+    }
+});
+
+
+export {getUserProfile,getOtherUsersProfile,updateUserProfile,updateUserAvatarImage,updateUserCoverImage,subscribeUnsubscribe};
