@@ -24,7 +24,7 @@ const userSchema = new Schema<IUser>(
         fullName: { type: String, required: true },
         avatar: { type: String, default: "" },
         coverImage: { type: String, default: "" },
-        watchHistory: { type: [mongoose.Types.ObjectId], default: [] },
+        watchHistory: { type: [Schema.Types.ObjectId], default: [] },
         password: { type: String, required: [true, "Password is required"] },
         refreshToken: { type: String, default: "" },
     },

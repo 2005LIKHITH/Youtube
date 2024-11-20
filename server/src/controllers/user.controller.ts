@@ -5,8 +5,9 @@ import { User, IUser } from "../models/user.model";
 import { uploadOnCloudinary , deleteImageFromCloudinary} from "../utils/cloudinary";
 import { ApiResponse } from "../utils/ApiResponse";
 import { addAbortSignal } from "stream";
-import mongoose, { ObjectId } from "mongoose";
+import mongoose, { ObjectId, Schema, Types } from "mongoose";
 import { Subscription } from "../models/subscription.model";
+import { Video } from "../models/video.model";
 
 /*
 
@@ -24,6 +25,12 @@ import { Subscription } from "../models/subscription.model";
 
 
 */
+interface IVideo extends Document {
+    _id: ObjectId; // Ensure _id is defined and of type ObjectId
+    owner: ObjectId; // For comparison with req.user._id
+    // other fields...
+}
+
 const getUserProfile = asyncHandler(async (req: Request, res: Response) => {
     const id = req.user?._id as string;
 
@@ -412,8 +419,38 @@ const deleteWatchHistory = asyncHandler(async (req: Request , res:Response) => {
         new ApiResponse(200 , "" , "watch history deleted successfully")
     )
 })
+
+
+const videoWatched = asyncHandler(async (req: Request, res: Response) => {
+    const userId = req.user?._id;
+
+    if (!userId) {
+        throw new ApiError(401, "Unauthorized");
+    }
+
+    const user = await User.findById(userId);
+    if (!user) throw new ApiError(404, "User not found");
+
+    if (!mongoose.isValidObjectId(req.params.id)) {
+        throw new ApiError(400, "Invalid video ID");
+    }
+
+    const video = await Video.findById(req.params.id);
+    if (!video) throw new ApiError(404, "Video not found");
     
+    if (video.owner.toString() === userId.toString()) {
+        throw new ApiError(400, "You cannot watch your own video");
+    }
+    
+    if (!user.watchHistory.some((id) => id.toString() === video._id .toString())) {
+        user.watchHistory.push(video._id); 
+        await user.save();
+    }
+
+    return res.status(200).json(new ApiResponse(200, "Video watched successfully",{
+        message: "Video watched successfully",}));
+});
 
 export {getUserProfile,getOtherUsersProfile,updateUserProfile,
     viewSubscribers,updateUserAvatarImage,updateUserCoverImage,
-    getWatchHistory,deleteWatchHistory,subscribeUnsubscribe,deleteAvatarImage,deleteCoverImage,};
+    getWatchHistory,deleteWatchHistory,subscribeUnsubscribe,deleteAvatarImage,deleteCoverImage,videoWatched};

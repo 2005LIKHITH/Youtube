@@ -4,8 +4,13 @@ import { IUser } from "../models/user.model";
 // Extend the Express Request interface to include the user property
 declare global {
   namespace Express {
-    interface Request {
-      user?: IUser;  // Add the user property to the request object, which can be an IUser or undefined
-    }
+      interface User {
+          _id: string;
+          // Add any other properties your user object may have
+      }
+      interface Request {
+          user?: User; // Add this to the Request interface
+      }
+      
   }
 }
