@@ -1,6 +1,6 @@
 import mongoose,{Schema,Document,Model,Types} from "mongoose";
 
-export interface ILike extends Document{
+export interface ILike {
     video:Types.ObjectId,
     comment:Types.ObjectId,
     likedBy:Types.ObjectId,

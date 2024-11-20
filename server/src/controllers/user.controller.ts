@@ -9,6 +9,8 @@ import mongoose, { ObjectId, Schema, Types } from "mongoose";
 import { Subscription } from "../models/subscription.model";
 import { Video } from "../models/video.model";
 import { Like } from "../models/like.model";
+import { Comment } from "../models/comment.model";
+import { CommunityPost } from "../models/communityPost.model";
 /*
 
         All Functionalities of User Controller
@@ -430,14 +432,14 @@ const videoWatched = asyncHandler(async (req: Request, res: Response) => {
         throw new ApiError(400, "Invalid video ID");
     }
 
-    const video :any= await Video.findById(req.params.id);
+    const video = await Video.findById(req.params.id);
     if (!video) throw new ApiError(404, "Video not found");
     
     if (video.owner.toString() === userId.toString()) {
         throw new ApiError(400, "You cannot watch your own video");
     }
     
-    if (!user.watchHistory.some((id) => id.toString() === video._id.toString())) {
+    if (!user.watchHistory.some((id) => id.toString() === video._id .toString())) {
         user.watchHistory.push(video._id); 
         await user.save();
     }
@@ -446,6 +448,55 @@ const videoWatched = asyncHandler(async (req: Request, res: Response) => {
         message: "Video watched successfully",}));
 });
 
+
+const likeUnlike = asyncHandler(async (req: Request, res: Response) => {
+    const userId = req.user?._id;
+    if (!userId) throw new ApiError(400, "User ID is required");
+
+    const { content: contentType, id: contentId } = req.params;
+    if (!contentType) throw new ApiError(400, "Content type is required");
+    if (!contentId) throw new ApiError(400, "Content ID is required");
+
+    // Validate contentId
+    if (!mongoose.Types.ObjectId.isValid(contentId)) {
+        throw new ApiError(400, "Invalid Content ID");
+    }
+
+    let content;
+    if (contentType === "video") {
+        content = await Video.findById(contentId);
+        if (!content) throw new ApiError(404, "Video not found");
+    } else if (contentType === "comment") {
+        content = await Comment.findById(contentId); // Ensure `Comment` model is imported
+        if (!content) throw new ApiError(404, "Comment not found");
+    } else if (contentType === "communityPost") {
+        content = await CommunityPost.findById(contentId); // Ensure `CommunityPost` model is imported
+        if (!content) throw new ApiError(404, "Community Post not found");
+    } else {
+        throw new ApiError(400, "Invalid content type");
+    }
+
+
+    const existingLike = await Like.findOne({
+        [contentType]: contentId,
+        likedBy: userId,
+    });
+
+    if (existingLike) {
+        // Unlike: Remove the existing like
+        await existingLike.deleteOne();
+        return res.status(200).json({ message: "Content unliked successfully" });
+    } else {
+        // Like: Create a new like
+        const newLike = new Like({
+            [contentType]: contentId,
+            likedBy: userId,
+        });
+        await newLike.save();
+        return res.status(200).json({ message: "Content liked successfully" });
+    }
+});
+
 export {getUserProfile,getOtherUsersProfile,updateUserProfile,
     viewSubscribers,updateUserAvatarImage,updateUserCoverImage,
-    getWatchHistory,deleteWatchHistory,subscribeUnsubscribe,deleteAvatarImage,deleteCoverImage,videoWatched};
+    getWatchHistory,deleteWatchHistory,subscribeUnsubscribe,deleteAvatarImage,deleteCoverImage,videoWatched,likeUnlike};

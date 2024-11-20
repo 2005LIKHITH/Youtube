@@ -1,7 +1,7 @@
 import mongoose,{Schema,Document,Types,Model} from "mongoose";
 import  mongooseAggregatePaginate from "mongoose-aggregate-paginate-v2";
 
-export interface IVideo extends Document{
+export interface IVideo{
     videoFile:string,
     thumbnail:string,
     description:string,

@@ -1,4 +1,4 @@
-import mongoose, { Schema, Document, Model } from "mongoose";
+import mongoose, { Schema, Document, Model,Types } from "mongoose";
 import jwt from "jsonwebtoken";
 import argon2 from "argon2";
 
@@ -8,7 +8,7 @@ export interface IUser extends Document {
     fullName: string;
     avatar?: string;
     coverImage?: string;
-    watchHistory: mongoose.Types.ObjectId[];
+    watchHistory: Types.ObjectId[];
     following : mongoose.Types.ObjectId[]
     password: string;
     refreshToken: string;
@@ -24,7 +24,7 @@ const userSchema = new Schema<IUser>(
         fullName: { type: String, required: true },
         avatar: { type: String, default: "" },
         coverImage: { type: String, default: "" },
-        watchHistory: { type: [Schema.Types.ObjectId], default: [] },
+        watchHistory: { type: [Types.ObjectId], default: [] },
         password: { type: String, required: [true, "Password is required"] },
         refreshToken: { type: String, default: "" },
     },
