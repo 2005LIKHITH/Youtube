@@ -497,6 +497,101 @@ const likeUnlike = asyncHandler(async (req: Request, res: Response) => {
     }
 });
 
+const createComment = asyncHandler(async (req: Request, res: Response) => {
+    const userId = req.user?._id;
+    if (!userId) throw new ApiError(400, "User ID is required");
+
+    const { contentType, contentId } = req.params; 
+    const { text } = req.body;
+
+    if (!contentType) throw new ApiError(400, "Content type is required");
+    if (!contentId) throw new ApiError(400, "Content ID is required");
+    if (!text || text.trim() === "") throw new ApiError(400, "Comment text is required");
+
+    if (!mongoose.Types.ObjectId.isValid(contentId)) {
+        throw new ApiError(400, "Invalid Content ID");
+    }
+
+    let content;
+
+    switch (contentType) {
+        case "video":
+            content = await Video.findById(contentId);
+            if (!content) throw new ApiError(404, "Video not found");
+            break;
+        case "communityPost":
+            content = await CommunityPost.findById(contentId); 
+            if (!content) throw new ApiError(404, "Community Post not found");
+            break;
+        default:
+            throw new ApiError(400, "Invalid content type");
+    }
+
+    const comment = new Comment({
+        userId,
+        content: contentId,
+        text,
+        [`${contentType}Id`]: contentId, 
+    });
+
+    await comment.save();
+
+    
+if (!content.comments) content.comments = []; 
+    content.comments.push(comment._id);
+    await content.save();
+
+    res.status(201).json({
+        message: "Comment created successfully",
+        comment,
+    });
+});
+
+const deleteComment = asyncHandler(async (req: Request, res: Response) => {
+    const userId = req.user?._id;
+    if (!userId) throw new ApiError(400, "User ID is required");
+
+    const { contentId, commentId } = req.params;
+    if (!contentId) throw new ApiError(400, "Content ID is required");
+    if (!commentId) throw new ApiError(400, "Comment ID is required");
+
+    if (!mongoose.Types.ObjectId.isValid(contentId)) {
+        throw new ApiError(400, "Invalid Content ID");
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(commentId)) {
+        throw new ApiError(400, "Invalid Comment ID");
+    }
+
+    const comment = await Comment.findById(commentId);
+    if (!comment) throw new ApiError(404, "Comment not found");
+
+    if (!comment.userId.equals(userId)) { // Use .equals() for ObjectId comparison
+        throw new ApiError(403, "You are not authorized to delete this comment");
+    }
+
+    // Delete the comment
+    await Comment.deleteOne({ _id: commentId });
+
+    // Pull the comment from the associated content (either Video or CommunityPost)
+    const content = await Video.findById(contentId) || await CommunityPost.findById(contentId);
+
+    if (!content) {
+        throw new ApiError(404, "Content not found");
+    }
+
+    // Ensure content is of the correct type and update accordingly
+    if (content instanceof Video) {
+        await Video.updateOne({ _id: contentId }, { $pull: { comments: commentId } });
+    } else if (content instanceof CommunityPost) {
+        await CommunityPost.updateOne({ _id: contentId }, { $pull: { comments: commentId } });
+    }
+
+    res.status(200).json({ message: "Comment deleted successfully" });
+});
+
+
 export {getUserProfile,getOtherUsersProfile,updateUserProfile,
     viewSubscribers,updateUserAvatarImage,updateUserCoverImage,
-    getWatchHistory,deleteWatchHistory,subscribeUnsubscribe,deleteAvatarImage,deleteCoverImage,videoWatched,likeUnlike};
+    getWatchHistory,deleteWatchHistory,subscribeUnsubscribe,deleteAvatarImage,
+    deleteCoverImage,videoWatched,likeUnlike,createComment,deleteComment};
