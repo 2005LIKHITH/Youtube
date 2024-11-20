@@ -2,7 +2,7 @@ import { Request, Response } from "express";
 import { asyncHandler } from "../utils/asyncHandler";
 import { ApiError } from "../utils/ApiError";
 import { User, IUser } from "../models/user.model";
-import { uploadOnCloudinary } from "../utils/cloudinary";
+import { uploadOnCloudinary , deleteImageFromCloudinary} from "../utils/cloudinary";
 import { ApiResponse } from "../utils/ApiResponse";
 import { addAbortSignal } from "stream";
 import mongoose, { ObjectId } from "mongoose";
@@ -88,13 +88,18 @@ const getUserProfile = asyncHandler(async (req: Request, res: Response) => {
 
 const getOtherUsersProfile = asyncHandler(async (req: Request, res: Response) => {
     const { username } = req.params;
+    // console.log(username)
+    username.toLowerCase();
 
     if (!username || !username.trim())
         throw new ApiError(400, "Username is missing");
+    // console.log(username)
+
 
     const otherUserProfile = await User.aggregate([
         {
             $match: { userName: username.toLowerCase() },
+
         },
         {
             $lookup: {
@@ -138,6 +143,8 @@ const getOtherUsersProfile = asyncHandler(async (req: Request, res: Response) =>
             },
         },
     ]);
+    console.log(otherUserProfile)
+
 
     if (!otherUserProfile?.length)
         throw new ApiError(404, "User not found");
@@ -294,7 +301,119 @@ const viewSubscribers = asyncHandler(async (req: Request, res: Response) => {
         subscribers: userSubscribers,
     });
 });
+const deleteAvatarImage = asyncHandler(async (req: Request, res: Response) => {
+    const userId = req.user?._id;
 
+    if (!userId) throw new ApiError(400, "User ID is missing");
+    if (!mongoose.isValidObjectId(userId)) throw new ApiError(400, "Invalid User ID");
+
+    const user = await User.findById(userId);
+    if (!user) throw new ApiError(404, "User not found");
+
+    if (user.avatar) {
+        try {
+            const avatarPublicId = user.avatar.split('/').pop()?.split('.')[0];
+            if (avatarPublicId) {
+                await deleteImageFromCloudinary(avatarPublicId);
+            }
+        } catch {
+            throw new ApiError(500, "Failed to delete avatar image");
+        }
+    }
+
+    user.avatar = "";
+    await user.save();
+
+    return res.status(200).json({
+        success: true,
+        message: "Avatar image deleted successfully",
+    });
+});
+const deleteCoverImage = asyncHandler(async (req: Request, res: Response) => {
+    const userId = req.user?._id;
+
+    if (!userId) throw new ApiError(400, "User ID is missing");
+    if (!mongoose.isValidObjectId(userId)) throw new ApiError(400, "Invalid User ID");
+
+    const user = await User.findById(userId);
+    if (!user) throw new ApiError(404, "User not found");
+
+    if (user.coverImage) {
+        try {
+            const coverPublicId = user.coverImage.split('/').pop()?.split('.')[0];
+            if (coverPublicId) {
+                await deleteImageFromCloudinary(coverPublicId);
+            }
+        } catch {
+            throw new ApiError(500, "Failed to delete cover image");
+        }
+    }
+
+    user.coverImage = "";
+    await user.save();
+
+    return res.status(200).json({
+        success: true,
+        message: "Cover image deleted successfully",
+    });
+});
+
+const getWatchHistory  = asyncHandler(async (req: Request , res:Response) => {
+    const  user = await User.aggregate([
+        {
+            $match : { _id : new mongoose.Types.ObjectId(req.user?._id as string) }
+        },
+        {
+            $lookup : {
+                from : "videos",
+                localField : "watchHistory",
+                foreignField : "_id",
+                as : "watchHistory",
+                pipeline :[
+                    {
+                        $lookup :{
+                            from : "users" ,
+                            localField : "owner",
+                            foreignField : "_id" ,
+                            as : "owner",
+                            pipeline : [
+                                {
+                                    $project : {
+                                        userName : 1,
+                                    }
+                                }
+                            ]
+                        }
+                    },{
+                        $addFields : {owner : {$first : "$owner"}}
+                    },{
+                        $project : {
+                            thumbnail : 1,
+                            duration : 1,
+                        }
+                    }
+                ]
+            }
+        }
+    ])
+
+    return res.status(200).json(
+        new ApiResponse(200 , user[0]?.watchHistory , "watch history fetched successfully")
+    )
+})
+const deleteWatchHistory = asyncHandler(async (req: Request , res:Response) => {
+    const user = await User.findById(req.user?._id);
+    if(!user) throw new ApiError(404 , "User not found");
+
+    user.watchHistory = [];
+    await user.save();
+
+    return res.status(200).json(
+        new ApiResponse(200 , "" , "watch history deleted successfully")
+    )
+})
+    
 
 export {getUserProfile,getOtherUsersProfile,updateUserProfile,
-    viewSubscribers,updateUserAvatarImage,updateUserCoverImage,subscribeUnsubscribe};
+    viewSubscribers,updateUserAvatarImage,updateUserCoverImage,
+    getWatchHistory,deleteWatchHistory,subscribeUnsubscribe,deleteAvatarImage,deleteCoverImage,};
