@@ -12,7 +12,6 @@ import { Like } from "../models/like.model";
 import { Comment } from "../models/comment.model";
 import { CommunityPost } from "../models/communityPost.model";
 /*
-
         All Functionalities of User Controller
         => Get User Profile
         => Update User Profile
@@ -21,11 +20,7 @@ import { CommunityPost } from "../models/communityPost.model";
         => Follow/Unfollow User
         => Like/Dislike Post/Comment
         => Comment on Post/ Delete Comment on Post
-        => 
-
-
-
-
+ 
 */
 
 const getUserProfile = asyncHandler(async (req: Request, res: Response) => {
@@ -547,7 +542,7 @@ if (!content.comments) content.comments = [];
     });
 });
 
-const deleteComment = asyncHandler(async (req: Request, res: Response) => {
+const  deleteComment = asyncHandler(async (req: Request, res: Response) => {
     const userId = req.user?._id;
     if (!userId) throw new ApiError(400, "User ID is required");
 
@@ -589,6 +584,7 @@ const deleteComment = asyncHandler(async (req: Request, res: Response) => {
 
     res.status(200).json({ message: "Comment deleted successfully" });
 });
+
 
 
 export {getUserProfile,getOtherUsersProfile,updateUserProfile,
